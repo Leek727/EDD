@@ -1,3 +1,4 @@
+import dht
 import network
 import socket
 import time
@@ -26,11 +27,16 @@ onboard = Pin("LED", Pin.OUT, value=0)
 ssid = 'A Network'
 password = 'A Password'
 
-temperature = 10
+temperature = 25
 
 
 
 wlan = network.WLAN(network.STA_IF)
+
+
+# temp sensor setup
+sensor = dht.DHT22(Pin(22))
+
 
 def connect_to_network():
     wlan.active(True)
@@ -83,6 +89,8 @@ def bit_to_ns(value):
         
     if value < 0:
         value = 0
+        
+    print(value)
         
     value = value/255
     return int(value*1000000)+1000000
@@ -139,11 +147,28 @@ def ap_mode(ssid, password):
 
 async def servoPID():
     while True:
-        pwm.duty_ns(bit_to_ns(temperature))
+        # update sensor
+        try:
+            sensor.measure()
+            temp = sensor.temperature() # temp in C
+            
+            kP = 300
+            error = temp - temperature
+            
+            # closed 0, open 255
+            val = bit_to_ns(int(kP * error))
+            
+            pwm.duty_ns(val)
+            print(f"Current Temp : {temp}")
+            print(f"Current Setpoint: {temperature}")
+            
+        except OSError as e:
+            pass
         await asyncio.sleep(1)
 
 
 async def main():
+    global temperature
     print('Connecting to Network...')
     ap_mode("vent", "password")
 
@@ -155,13 +180,15 @@ async def main():
         
 
     while True:
-        await asyncio.sleep(5)
+        await asyncio.sleep(1)
+        
 
 # main init
 try:
     asyncio.run(main())
 finally:
     asyncio.new_event_loop()
+
 
 
 
